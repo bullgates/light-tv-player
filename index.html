@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
     /* ==========================================================================
-       DESIGN SYSTEM & PERFORMANCE (Optimized for 10ft Smart TV UI)
+       DESIGN SYSTEM & PERFORMANCE (Optimized for BrowseHere & Smart TV UI)
        ========================================================================== */
     :root {
       --bg-color: #0f0f12;
@@ -28,7 +28,7 @@
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      user-select: none; /* Previne seleção acidental por AirMouse */
+      user-select: none;
     }
 
     body, html {
@@ -41,7 +41,7 @@
       overflow: hidden;
     }
 
-    /* Estilo do Foco D-Pad Universal */
+    /* Estilo do Foco D-Pad Universal / Cursor BrowseHere */
     :focus {
       outline: none;
       border-color: var(--accent-color) !important;
@@ -91,14 +91,13 @@
       pointer-events: auto;
     }
 
-    /* Estado OSD Escondido: Remove visibilidade, opacidade e sombras sobre o vídeo */
     .osd-overlay.fade-out {
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
     }
 
-    /* Sidebar de Canais no OSD */
+    /* Sidebar de Canais no OSD com Scroll Suave Forçado */
     .sidebar {
       width: 380px;
       height: 100%;
@@ -131,21 +130,24 @@
       cursor: pointer;
     }
 
+    /* Scrollbar otimizada para Browsers de TV */
     .channel-list {
       flex: 1;
       overflow-y: auto;
+      scroll-behavior: smooth;
       display: flex;
       flex-direction: column;
       gap: 8px;
       padding-right: 5px;
+      -webkit-overflow-scrolling: touch;
     }
 
     .channel-list::-webkit-scrollbar, .manager-table-container::-webkit-scrollbar {
-      width: 6px;
+      width: 8px;
     }
     .channel-list::-webkit-scrollbar-thumb, .manager-table-container::-webkit-scrollbar-thumb {
-      background: #2d2d3d;
-      border-radius: 3px;
+      background: var(--accent-color);
+      border-radius: 4px;
     }
 
     .channel-item {
@@ -158,6 +160,7 @@
       border-radius: 8px;
       border: 2px solid transparent;
       cursor: pointer;
+      flex-shrink: 0; /* Impede encolhimento no scroll */
     }
 
     .channel-item.active {
@@ -235,7 +238,6 @@
     .stream-status.online { background: var(--success); }
     .stream-status.offline { background: var(--danger); }
 
-    /* Indicator de Loader / Buffer */
     .loader {
       position: absolute;
       top: 50%;
@@ -251,7 +253,6 @@
     }
     @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
 
-    /* Message Box Error Overlay */
     .error-banner {
       position: absolute;
       top: 20px;
@@ -345,7 +346,6 @@
     .badge.offline { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
     .badge.pending { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
 
-    /* Modal de Edição */
     .modal-overlay {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -376,7 +376,8 @@
     <div id="loader" class="loader hidden"></div>
     <div id="error-banner" class="error-banner hidden">Erro na Reprodução do Stream</div>
 
-    <video id="video-player" autoplay crossorigin="anonymous"></video>
+    <!-- Adicionado playsinline e muted por defeito para contornar bloqueios do BrowseHere -->
+    <video id="video-player" autoplay playsinline muted crossorigin="anonymous"></video>
 
     <!-- OSD Overlay -->
     <div id="osd-overlay" class="osd-overlay">
@@ -421,14 +422,12 @@
     </header>
 
     <div class="manager-controls">
-      <!-- Importadores -->
       <button id="btn-trigger-file" class="btn-ui" tabindex="0">📁 Abrir Ficheiro M3U/JSON</button>
       <input type="file" id="file-input" accept=".m3u,.m3u8,.json" class="hidden">
 
       <input type="text" id="url-m3u-input" class="input-ui" placeholder="URL da Lista M3U/M3U8..." style="flex:1;" tabindex="0">
       <button id="btn-load-url" class="btn-ui" tabindex="0">📥 Baixar URL</button>
 
-      <!-- Ações de Lista -->
       <button id="btn-run-healthcheck" class="btn-ui" tabindex="0">🩺 Testar Canais</button>
       <button id="btn-export-m3u" class="btn-ui" tabindex="0">💾 Exportar M3U</button>
       <button id="btn-export-json" class="btn-ui" tabindex="0">💾 Exportar Backup JSON</button>
@@ -477,20 +476,16 @@
   </div>
 
   <!-- ==========================================================================
-       LÓGICA JAVASCRIPT INTEGRADA
+       LÓGICA JAVASCRIPT INTEGRADA (Fixes BrowseHere)
        ========================================================================== -->
   <script>
-    /* --------------------------------------------------------------------------
-       ESTADO GLOBAL DA APLICAÇÃO & ARRAYS
-       -------------------------------------------------------------------------- */
     const STORAGE_KEY = 'web_iptv_channels_db';
-    let channels = [];          // Lista Completa de Canais em Memória
-    let activePlaylist = [];    // Canais Ativos no Player
+    let channels = [];
+    let activePlaylist = [];
     let hlsPlayer = null;
     let osdTimeout = null;
     let editingChannelId = null;
 
-    // Elementos DOM
     const video = document.getElementById('video-player');
     const osdOverlay = document.getElementById('osd-overlay');
     const playerView = document.getElementById('player-view');
@@ -498,18 +493,13 @@
     const loader = document.getElementById('loader');
     const errorBanner = document.getElementById('error-banner');
     
-    // Controlo de OSD
     const osdChannelList = document.getElementById('osd-channel-list');
     const osdCategoryFilter = document.getElementById('osd-category-filter');
     
-    // Controlo do Gestor
     const managerTableBody = document.getElementById('manager-table-body');
     const managerCategoryFilter = document.getElementById('manager-category-filter');
     const managerSearch = document.getElementById('manager-search');
 
-    /* --------------------------------------------------------------------------
-       INICIALIZAÇÃO & PERSISTÊNCIA
-       -------------------------------------------------------------------------- */
     window.addEventListener('DOMContentLoaded', () => {
       loadStorageData();
       initPlayerEngine();
@@ -545,25 +535,24 @@
     }
 
     /* --------------------------------------------------------------------------
-       MOTOR DE REPRODUÇÃO & GESTÃO DE FULLSCREEN
+       MOTOR DE REPRODUÇÃO - OTIMIZADO PARA BROWSEHERE (Evita Freeze)
        -------------------------------------------------------------------------- */
     function initPlayerEngine() {
       if (Hls.isSupported()) {
         hlsPlayer = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          manifestLoadingTimeOut: 10000
+          enableWorker: false, // BrowseHere falha com WebWorkers em HLS
+          lowLatencyMode: false,
+          manifestLoadingTimeOut: 15000,
+          maxBufferLength: 30
         });
 
         hlsPlayer.on(Hls.Events.ERROR, function (event, data) {
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                console.warn("Erro de rede HLS, tentando recuperar...");
                 hlsPlayer.startLoad();
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
-                console.warn("Erro de media HLS, tentando recuperar...");
                 hlsPlayer.recoverMediaError();
                 break;
               default:
@@ -574,7 +563,6 @@
         });
       }
 
-      // Eventos nativos de Media
       video.addEventListener('waiting', () => loader.classList.remove('hidden'));
       video.addEventListener('playing', () => {
         loader.classList.add('hidden');
@@ -583,23 +571,13 @@
       });
       video.addEventListener('error', () => {
         loader.classList.add('hidden');
-        showError("Falha na reprodução do fluxo de vídeo.");
+        showError("Falha na reprodução no BrowseHere.");
       });
-    }
-
-    function requestFullScreenNative() {
-      const docEl = document.documentElement;
-      if (docEl.requestFullscreen) {
-        docEl.requestFullscreen().catch(() => {});
-      } else if (docEl.webkitRequestFullscreen) {
-        docEl.webkitRequestFullscreen().catch(() => {});
-      }
     }
 
     function playChannel(channel) {
       if (!channel || !channel.url) return;
 
-      requestFullScreenNative();
       loader.classList.remove('hidden');
       errorBanner.classList.add('hidden');
 
@@ -611,17 +589,31 @@
         hlsPlayer.detachMedia();
       }
 
+      // Função para tentar dar play tirando o Mute de forma segura
+      const startPlayback = () => {
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            video.muted = false; // Tenta desmutar
+          }).catch(err => {
+            console.warn("Autoplay bloqueado pelo BrowseHere, tentando em Muted:", err);
+            video.muted = true;
+            video.play();
+          });
+        }
+      };
+
       if (channel.url.includes('.m3u8') && Hls.isSupported()) {
         document.getElementById('current-tech').textContent = 'HLS.js Engine';
         hlsPlayer.loadSource(channel.url);
         hlsPlayer.attachMedia(video);
         hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(e => console.warn("Auto-play bloqueado:", e));
+          startPlayback();
         });
       } else {
         document.getElementById('current-tech').textContent = 'HTML5 Native';
         video.src = channel.url;
-        video.play().catch(e => console.warn("Auto-play nativo bloqueado:", e));
+        startPlayback();
       }
 
       document.querySelectorAll('.channel-item').forEach(el => {
@@ -635,7 +627,7 @@
       if (hlsPlayer) {
         hlsPlayer.destroy();
       }
-      showError("Erro crítico de HLS. Tentando execução nativa...");
+      showError("Erro crítico no fluxo. Tentando fallback nativo...");
     }
 
     function updateResolutionInfo() {
@@ -651,7 +643,7 @@
     }
 
     /* --------------------------------------------------------------------------
-       CONTROLO DE INTERFACE & D-PAD NAVIGATION (Android TV Remote)
+       CONTROLO D-PAD / CURSOR - FIX DE SCROLL NO BROWSEHERE
        -------------------------------------------------------------------------- */
     function setupDPadNavigation() {
       document.addEventListener('keydown', (e) => {
@@ -665,15 +657,22 @@
 
         resetOSDTimeout();
 
-        switch (e.key) {
-          case 'ArrowUp':
-          case 'ArrowDown':
-            if (osdOverlay.classList.contains('fade-out') && managerView.classList.contains('hidden')) {
+        // Tratamento de Scroll manual do D-Pad para BrowseHere
+        if (!osdOverlay.classList.contains('fade-out') && managerView.classList.contains('hidden')) {
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            const focusEl = document.activeElement;
+            if (focusEl && focusEl.classList.contains('channel-item')) {
               e.preventDefault();
-              navigateChannel(e.key === 'ArrowUp' ? -1 : 1);
+              const nextEl = e.key === 'ArrowDown' ? focusEl.nextElementSibling : focusEl.previousElementSibling;
+              if (nextEl && nextEl.classList.contains('channel-item')) {
+                nextEl.focus();
+                nextEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+              }
             }
-            break;
-            
+          }
+        }
+
+        switch (e.key) {
           case 'Escape':
           case 'BackSpace':
           case 'GoBack':
@@ -698,7 +697,7 @@
         if (managerView.classList.contains('hidden') && document.activeElement.tagName !== 'SELECT') {
           hideOSD();
         }
-      }, 4000);
+      }, 5000);
     }
 
     function showOSD() {
@@ -710,25 +709,8 @@
       osdOverlay.classList.add('fade-out');
     }
 
-    function navigateChannel(direction) {
-      if (activePlaylist.length === 0) return;
-      const activeEl = document.querySelector('.channel-item.active');
-      let currentIndex = 0;
-
-      if (activeEl) {
-        const id = activeEl.dataset.id;
-        currentIndex = activePlaylist.findIndex(c => c.id === id);
-      }
-
-      let newIndex = currentIndex + direction;
-      if (newIndex < 0) newIndex = activePlaylist.length - 1;
-      if (newIndex >= activePlaylist.length) newIndex = 0;
-
-      playChannel(activePlaylist[newIndex]);
-    }
-
     /* --------------------------------------------------------------------------
-       PARSER M3U & IMPORTAÇÃO DE DADOS
+       PARSER M3U & IMPORTAÇÃO
        -------------------------------------------------------------------------- */
     function parseM3U(content) {
       const lines = content.split('\n');
@@ -818,46 +800,8 @@
     });
 
     /* --------------------------------------------------------------------------
-       GESTOR / BACK OFFICE (Renderização & Eventos)
+       RENDERIZAÇÃO DE CANAIS COM SCROLL AUTOMÁTICO (FIX DE FOCO)
        -------------------------------------------------------------------------- */
-    function renderManagerTable() {
-      const filterGroup = managerCategoryFilter.value;
-      const searchTxt = managerSearch.value.toLowerCase();
-
-      managerTableBody.innerHTML = '';
-
-      const filtered = channels.filter(c => {
-        const matchesGroup = filterGroup === 'ALL' || c.group === filterGroup;
-        const matchesSearch = c.name.toLowerCase().includes(searchTxt);
-        return matchesGroup && matchesSearch;
-      });
-
-      filtered.forEach(c => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><input type="checkbox" class="chk-select" data-id="${c.id}" ${c.selected !== false ? 'checked' : ''} tabindex="0"></td>
-          <td><img src="${c.logo || 'data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"30\" viewBox=\"0 0 24 24\"><path fill=\"%239ca3af\" d=\"M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z\"/></svg>'}" class="channel-logo" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"30\" height=\"30\" viewBox=\"0 0 24 24\"><path fill=\"%239ca3af\" d=\"M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z\"/></svg>'"></td>
-          <td><strong>${escapeHtml(c.name)}</strong></td>
-          <td>${escapeHtml(c.group || 'Geral')}</td>
-          <td><span class="badge ${c.status || 'pending'}">${c.status || 'Pendente'}</span></td>
-          <td>
-            <button class="btn-ui" onclick="editChannel('${c.id}')" tabindex="0">✏️</button>
-            <button class="btn-ui" onclick="deleteChannel('${c.id}')" style="background: var(--danger);" tabindex="0">🗑️</button>
-          </td>
-        `;
-        managerTableBody.appendChild(tr);
-      });
-
-      document.querySelectorAll('.chk-select').forEach(chk => {
-        chk.addEventListener('change', (e) => {
-          const id = e.target.dataset.id;
-          const ch = channels.find(item => item.id === id);
-          if (ch) ch.selected = e.target.checked;
-          saveStorageData();
-        });
-      });
-    }
-
     function renderOSDChannelList() {
       const selectedGroup = osdCategoryFilter.value;
       osdChannelList.innerHTML = '';
@@ -886,6 +830,11 @@
           </div>
           <button class="btn-remove-osd" title="Remover Canal" tabindex="0">🗑️</button>
         `;
+
+        // Otimização de Scroll: Garante que o elemento no foco fica visível no BrowseHere
+        item.addEventListener('focus', () => {
+          item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        });
 
         item.addEventListener('click', (e) => {
           if (!e.target.classList.contains('btn-remove-osd')) {
@@ -927,6 +876,44 @@
       }
     }
 
+    function renderManagerTable() {
+      const filterGroup = managerCategoryFilter.value;
+      const searchTxt = managerSearch.value.toLowerCase();
+
+      managerTableBody.innerHTML = '';
+
+      const filtered = channels.filter(c => {
+        const matchesGroup = filterGroup === 'ALL' || c.group === filterGroup;
+        const matchesSearch = c.name.toLowerCase().includes(searchTxt);
+        return matchesGroup && matchesSearch;
+      });
+
+      filtered.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="checkbox" class="chk-select" data-id="${c.id}" ${c.selected !== false ? 'checked' : ''} tabindex="0"></td>
+          <td><img src="${c.logo || ''}" class="channel-logo" onerror="this.style.display='none'"></td>
+          <td><strong>${escapeHtml(c.name)}</strong></td>
+          <td>${escapeHtml(c.group || 'Geral')}</td>
+          <td><span class="badge ${c.status || 'pending'}">${c.status || 'Pendente'}</span></td>
+          <td>
+            <button class="btn-ui" onclick="editChannel('${c.id}')" tabindex="0">✏️</button>
+            <button class="btn-ui" onclick="deleteChannel('${c.id}')" style="background: var(--danger);" tabindex="0">🗑️</button>
+          </td>
+        `;
+        managerTableBody.appendChild(tr);
+      });
+
+      document.querySelectorAll('.chk-select').forEach(chk => {
+        chk.addEventListener('change', (e) => {
+          const id = e.target.dataset.id;
+          const ch = channels.find(item => item.id === id);
+          if (ch) ch.selected = e.target.checked;
+          saveStorageData();
+        });
+      });
+    }
+
     function populateCategoryDropdowns() {
       const groups = [...new Set(channels.map(c => c.group || 'Geral'))].sort();
 
@@ -950,13 +937,13 @@
     }
 
     /* --------------------------------------------------------------------------
-       HEALTH CHECKER / TESTADOR DE STREAMS
+       HEALTH CHECKER
        -------------------------------------------------------------------------- */
     document.getElementById('btn-run-healthcheck').addEventListener('click', async () => {
       const selectedChannels = channels.filter(c => c.selected !== false);
       if (selectedChannels.length === 0) return alert('Nenhum canal selecionado para testar.');
 
-      alert(`A iniciar o teste em lote de ${selectedChannels.length} canais...`);
+      alert(`A iniciar teste em ${selectedChannels.length} canais...`);
 
       for (let ch of selectedChannels) {
         ch.status = 'pending';
@@ -980,11 +967,11 @@
         renderManagerTable();
       }
       saveStorageData();
-      alert('Teste de conectividade concluído!');
+      alert('Teste concluído!');
     });
 
     /* --------------------------------------------------------------------------
-       AÇÕES DO BACK OFFICE & MODAL DE EDIÇÃO
+       MODAL & CONTROLOS DO GESTOR
        -------------------------------------------------------------------------- */
     document.getElementById('btn-open-manager').addEventListener('click', () => {
       playerView.classList.add('hidden');
@@ -1004,7 +991,7 @@
       activePlaylist = channels.filter(c => c.selected !== false);
       saveStorageData();
       renderOSDChannelList();
-      alert(`Playlist ativa atualizada com ${activePlaylist.length} canais.`);
+      alert(`Ativados ${activePlaylist.length} canais.`);
       closeManager();
     });
 
@@ -1038,7 +1025,7 @@
     };
 
     window.deleteChannel = function(id) {
-      if (confirm('Deseja eliminar este canal?')) {
+      if (confirm('Eliminar este canal?')) {
         channels = channels.filter(c => c.id !== id);
         activePlaylist = activePlaylist.filter(c => c.id !== id);
         saveStorageData();
@@ -1082,7 +1069,7 @@
     });
 
     /* --------------------------------------------------------------------------
-       EXPORTAÇÃO DE DADOS (M3U / JSON)
+       EXPORTAÇÃO
        -------------------------------------------------------------------------- */
     document.getElementById('btn-export-m3u').addEventListener('click', () => {
       let m3uContent = '#EXTM3U\n';
@@ -1109,16 +1096,10 @@
       URL.revokeObjectURL(a.href);
     }
 
-    /* --------------------------------------------------------------------------
-       FILTROS E PESQUISA
-       -------------------------------------------------------------------------- */
     osdCategoryFilter.addEventListener('change', renderOSDChannelList);
     managerCategoryFilter.addEventListener('change', renderManagerTable);
     managerSearch.addEventListener('input', renderManagerTable);
 
-    /* --------------------------------------------------------------------------
-       UTILITÁRIOS
-       -------------------------------------------------------------------------- */
     function escapeHtml(str) {
       return str.replace(/[&<>"']/g, function(m) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
