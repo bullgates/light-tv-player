@@ -151,6 +151,7 @@
     .channel-item {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 12px;
       padding: 12px;
       background: var(--card-bg);
@@ -188,6 +189,23 @@
     .channel-group {
       font-size: 13px;
       color: var(--text-muted);
+    }
+
+    .btn-remove-osd {
+      background: transparent;
+      border: none;
+      color: var(--danger);
+      font-size: 16px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s, background 0.2s;
+    }
+
+    .btn-remove-osd:hover, .btn-remove-osd:focus {
+      opacity: 1;
+      background: rgba(239, 68, 68, 0.2);
     }
 
     /* Info Bar Inferior no Player */
@@ -570,7 +588,6 @@
     }
 
     function requestFullScreenNative() {
-      // Tenta maximizar o contentor ou o vídeo no BrowseHere / Android TV Browser
       const docEl = document.documentElement;
       if (docEl.requestFullscreen) {
         docEl.requestFullscreen().catch(() => {});
@@ -611,7 +628,6 @@
         el.classList.toggle('active', el.dataset.id === channel.id);
       });
 
-      // Esconde o OSD para dar ecrã total limpo
       resetOSDTimeout();
     }
 
@@ -861,18 +877,54 @@
         item.dataset.id = c.id;
         item.tabIndex = 0;
         item.innerHTML = `
-          <img src="${c.logo || ''}" class="channel-logo" onerror="this.style.display='none'">
-          <div class="channel-info">
-            <span class="channel-name">${escapeHtml(c.name)}</span>
-            <span class="channel-group">${escapeHtml(c.group || 'Geral')}</span>
+          <div style="display: flex; align-items: center; gap: 12px; overflow: hidden; flex: 1;">
+            <img src="${c.logo || ''}" class="channel-logo" onerror="this.style.display='none'">
+            <div class="channel-info">
+              <span class="channel-name">${escapeHtml(c.name)}</span>
+              <span class="channel-group">${escapeHtml(c.group || 'Geral')}</span>
+            </div>
           </div>
+          <button class="btn-remove-osd" title="Remover Canal" tabindex="0">🗑️</button>
         `;
-        item.addEventListener('click', () => playChannel(c));
-        item.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') playChannel(c);
+
+        item.addEventListener('click', (e) => {
+          if (!e.target.classList.contains('btn-remove-osd')) {
+            playChannel(c);
+          }
         });
+
+        item.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.target.classList.contains('btn-remove-osd')) {
+            playChannel(c);
+          }
+        });
+
+        const btnRemove = item.querySelector('.btn-remove-osd');
+        btnRemove.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeChannelFromOSD(c.id);
+        });
+
         osdChannelList.appendChild(item);
       });
+    }
+
+    function removeChannelFromOSD(id) {
+      const activeEl = document.querySelector('.channel-item.active');
+      const isCurrentActive = activeEl && activeEl.dataset.id === id;
+
+      channels = channels.filter(c => c.id !== id);
+      activePlaylist = activePlaylist.filter(c => c.id !== id);
+      saveStorageData();
+      refreshAllViews();
+
+      if (isCurrentActive && activePlaylist.length > 0) {
+        playChannel(activePlaylist[0]);
+      } else if (activePlaylist.length === 0) {
+        if (hlsPlayer) hlsPlayer.detachMedia();
+        video.src = '';
+        document.getElementById('current-channel-name').textContent = 'Nenhum canal selecionado';
+      }
     }
 
     function populateCategoryDropdowns() {
