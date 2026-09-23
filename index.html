@@ -160,7 +160,7 @@
       border-radius: 8px;
       border: 2px solid transparent;
       cursor: pointer;
-      flex-shrink: 0; /* Impede encolhimento no scroll */
+      flex-shrink: 0;
     }
 
     .channel-item.active {
@@ -229,7 +229,7 @@
 
     .stream-status {
       display: inline-block;
-      width: 10px;
+      width: 100px;
       height: 10px;
       border-radius: 50%;
       background: var(--warning);
@@ -369,14 +369,10 @@
 </head>
 <body>
 
-  <!-- ==========================================================================
-       VIEW: PLAYER DE VÍDEO (ECRÃ PRINCIPAL)
-       ========================================================================== -->
   <main id="player-view">
     <div id="loader" class="loader hidden"></div>
     <div id="error-banner" class="error-banner hidden">Erro na Reprodução do Stream</div>
 
-    <!-- Adicionado playsinline e muted por defeito para contornar bloqueios do BrowseHere -->
     <video id="video-player" autoplay playsinline muted crossorigin="anonymous"></video>
 
     <!-- OSD Overlay -->
@@ -409,9 +405,6 @@
     </div>
   </main>
 
-  <!-- ==========================================================================
-       VIEW: GESTOR DE LISTAS / BACK OFFICE
-       ========================================================================== -->
   <section id="manager-view" class="hidden">
     <header class="manager-header">
       <h1>Gestor de Listas IPTV</h1>
@@ -475,13 +468,12 @@
     </div>
   </div>
 
-  <!-- ==========================================================================
-       LÓGICA JAVASCRIPT INTEGRADA (Fixes BrowseHere)
-       ========================================================================== -->
   <script>
     const STORAGE_KEY = 'web_iptv_channels_db';
+    const LAST_CHANNEL_KEY = 'web_iptv_last_channel';
     let channels = [];
     let activePlaylist = [];
+    let currentChannelIndex = -1;
     let hlsPlayer = null;
     let osdTimeout = null;
     let editingChannelId = null;
@@ -507,6 +499,9 @@
       renderManagerTable();
       renderOSDChannelList();
       populateCategoryDropdowns();
+      
+      // Auto-play no último canal guardado
+      autoPlayLastChannel();
       resetOSDTimeout();
     });
 
@@ -534,25 +529,43 @@
       }
     }
 
+    function autoPlayLastChannel() {
+      if (activePlaylist.length === 0) return;
+      const lastChannelId = localStorage.getItem(LAST_CHANNEL_KEY);
+      let targetIndex = 0;
+
+      if (lastChannelId) {
+        const foundIndex = activePlaylist.findIndex(c => c.id === lastChannelId);
+        if (foundIndex !== -1) targetIndex = foundIndex;
+      }
+      
+      playChannelByIndex(targetIndex);
+    }
+
     /* --------------------------------------------------------------------------
-       MOTOR DE REPRODUÇÃO - OTIMIZADO PARA BROWSEHERE (Evita Freeze)
+       MOTOR DE REPRODUÇÃO - OTIMIZADO PARA RTP2 E CANAIS COM STALLING
        -------------------------------------------------------------------------- */
     function initPlayerEngine() {
       if (Hls.isSupported()) {
         hlsPlayer = new Hls({
-          enableWorker: false, // BrowseHere falha com WebWorkers em HLS
+          enableWorker: false, // BrowseHere falha com WebWorkers
           lowLatencyMode: false,
           manifestLoadingTimeOut: 15000,
-          maxBufferLength: 30
+          maxBufferLength: 60,
+          maxMaxBufferLength: 120,
+          liveSyncDurationCount: 3,
+          startLevel: -1
         });
 
         hlsPlayer.on(Hls.Events.ERROR, function (event, data) {
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
+                console.warn("Erro de rede HLS, tentando reconectar...");
                 hlsPlayer.startLoad();
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
+                console.warn("Erro de media HLS, tentando recuperar...");
                 hlsPlayer.recoverMediaError();
                 break;
               default:
@@ -571,8 +584,18 @@
       });
       video.addEventListener('error', () => {
         loader.classList.add('hidden');
-        showError("Falha na reprodução no BrowseHere.");
+        showError("Falha na reprodução do stream.");
       });
+    }
+
+    function playChannelByIndex(index) {
+      if (index < 0 || index >= activePlaylist.length) return;
+      currentChannelIndex = index;
+      const channel = activePlaylist[index];
+      
+      // Guardar como último canal reproduzido
+      localStorage.setItem(LAST_CHANNEL_KEY, channel.id);
+      playChannel(channel);
     }
 
     function playChannel(channel) {
@@ -589,12 +612,11 @@
         hlsPlayer.detachMedia();
       }
 
-      // Função para tentar dar play tirando o Mute de forma segura
       const startPlayback = () => {
         const playPromise = video.play();
         if (playPromise !== undefined) {
           playPromise.then(() => {
-            video.muted = false; // Tenta desmutar
+            video.muted = false;
           }).catch(err => {
             console.warn("Autoplay bloqueado pelo BrowseHere, tentando em Muted:", err);
             video.muted = true;
@@ -603,11 +625,11 @@
         }
       };
 
-      if (channel.url.includes('.m3u8') && Hls.isSupported()) {
+      if ((channel.url.includes('.m3u8') || channel.url.includes('/hls/')) && Hls.isSupported()) {
         document.getElementById('current-tech').textContent = 'HLS.js Engine';
         hlsPlayer.loadSource(channel.url);
         hlsPlayer.attachMedia(video);
-        hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+        hlsPlayer.once(Hls.Events.MANIFEST_PARSED, () => {
           startPlayback();
         });
       } else {
@@ -627,7 +649,11 @@
       if (hlsPlayer) {
         hlsPlayer.destroy();
       }
-      showError("Erro crítico no fluxo. Tentando fallback nativo...");
+      showError("Erro crítico no fluxo HLS. Tentando fallback nativo...");
+      if (activePlaylist[currentChannelIndex]) {
+        video.src = activePlaylist[currentChannelIndex].url;
+        video.play();
+      }
     }
 
     function updateResolutionInfo() {
@@ -643,12 +669,31 @@
     }
 
     /* --------------------------------------------------------------------------
-       CONTROLO D-PAD / CURSOR - FIX DE SCROLL NO BROWSEHERE
+       CONTROLO D-PAD E BOTÕES DE MUDAR DE CANAL DO COMANDO (CH+ / CH-)
        -------------------------------------------------------------------------- */
     function setupDPadNavigation() {
       document.addEventListener('keydown', (e) => {
+        const key = e.key;
+        const keyCode = e.keyCode;
+
+        // Suporte para Botões Channel UP / Down do Comando da TV
+        const isChannelUp = key === 'ChannelUp' || key === 'MediaTrackNext' || key === 'PageUp' || keyCode === 33 || keyCode === 427;
+        const isChannelDown = key === 'ChannelDown' || key === 'MediaTrackPrevious' || key === 'PageDown' || keyCode === 34 || keyCode === 428;
+
+        if (isChannelUp) {
+          e.preventDefault();
+          changeChannelStep(1);
+          return;
+        }
+
+        if (isChannelDown) {
+          e.preventDefault();
+          changeChannelStep(-1);
+          return;
+        }
+
         if (managerView.classList.contains('hidden') && osdOverlay.classList.contains('fade-out')) {
-          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
+          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(key)) {
             showOSD();
             e.preventDefault();
             return;
@@ -657,13 +702,12 @@
 
         resetOSDTimeout();
 
-        // Tratamento de Scroll manual do D-Pad para BrowseHere
         if (!osdOverlay.classList.contains('fade-out') && managerView.classList.contains('hidden')) {
-          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          if (key === 'ArrowDown' || key === 'ArrowUp') {
             const focusEl = document.activeElement;
             if (focusEl && focusEl.classList.contains('channel-item')) {
               e.preventDefault();
-              const nextEl = e.key === 'ArrowDown' ? focusEl.nextElementSibling : focusEl.previousElementSibling;
+              const nextEl = key === 'ArrowDown' ? focusEl.nextElementSibling : focusEl.previousElementSibling;
               if (nextEl && nextEl.classList.contains('channel-item')) {
                 nextEl.focus();
                 nextEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -672,7 +716,7 @@
           }
         }
 
-        switch (e.key) {
+        switch (key) {
           case 'Escape':
           case 'BackSpace':
           case 'GoBack':
@@ -689,6 +733,17 @@
 
       playerView.addEventListener('mousemove', showOSD);
       playerView.addEventListener('click', showOSD);
+    }
+
+    function changeChannelStep(direction) {
+      if (activePlaylist.length === 0) return;
+      let newIndex = currentChannelIndex + direction;
+      
+      if (newIndex >= activePlaylist.length) newIndex = 0;
+      if (newIndex < 0) newIndex = activePlaylist.length - 1;
+      
+      playChannelByIndex(newIndex);
+      showOSD();
     }
 
     function resetOSDTimeout() {
@@ -773,6 +828,7 @@
         activePlaylist = channels.filter(c => c.selected !== false);
         saveStorageData();
         refreshAllViews();
+        if (activePlaylist.length > 0) playChannelByIndex(0);
         alert(`${channels.length} canais carregados com sucesso!`);
       };
       reader.readAsText(file);
@@ -791,6 +847,7 @@
         activePlaylist = channels.filter(c => c.selected !== false);
         saveStorageData();
         refreshAllViews();
+        if (activePlaylist.length > 0) playChannelByIndex(0);
         alert(`Sucesso: ${channels.length} canais importados!`);
       } catch (err) {
         alert(`Erro ao descarregar a lista: ${err.message}`);
@@ -800,7 +857,7 @@
     });
 
     /* --------------------------------------------------------------------------
-       RENDERIZAÇÃO DE CANAIS COM SCROLL AUTOMÁTICO (FIX DE FOCO)
+       RENDERIZAÇÃO DE CANAIS
        -------------------------------------------------------------------------- */
     function renderOSDChannelList() {
       const selectedGroup = osdCategoryFilter.value;
@@ -831,20 +888,21 @@
           <button class="btn-remove-osd" title="Remover Canal" tabindex="0">🗑️</button>
         `;
 
-        // Otimização de Scroll: Garante que o elemento no foco fica visível no BrowseHere
         item.addEventListener('focus', () => {
           item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         });
 
         item.addEventListener('click', (e) => {
           if (!e.target.classList.contains('btn-remove-osd')) {
-            playChannel(c);
+            const idx = activePlaylist.findIndex(p => p.id === c.id);
+            if (idx !== -1) playChannelByIndex(idx);
           }
         });
 
         item.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' && !e.target.classList.contains('btn-remove-osd')) {
-            playChannel(c);
+            const idx = activePlaylist.findIndex(p => p.id === c.id);
+            if (idx !== -1) playChannelByIndex(idx);
           }
         });
 
@@ -868,7 +926,7 @@
       refreshAllViews();
 
       if (isCurrentActive && activePlaylist.length > 0) {
-        playChannel(activePlaylist[0]);
+        playChannelByIndex(0);
       } else if (activePlaylist.length === 0) {
         if (hlsPlayer) hlsPlayer.detachMedia();
         video.src = '';
