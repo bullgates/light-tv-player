@@ -3,27 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart TV Web IPTV Player</title>
-  <!-- hls.js via CDN com Fallback Defensivo -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <title>WOO TV - HTML5 App</title>
   <style>
-    /* ==========================================================================
-       DESIGN SYSTEM & PERFORMANCE (Optimized for BrowseHere & Smart TV UI)
-       ========================================================================== */
-    :root {
-      --bg-color: #0f0f12;
-      --card-bg: #1a1a24;
-      --accent-color: #3b82f6;
-      --accent-hover: #2563eb;
-      --text-main: #ffffff;
-      --text-muted: #9ca3af;
-      --danger: #ef4444;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --font-size-base: 18px;
-      --font-size-title: 24px;
-    }
-
     * {
       box-sizing: border-box;
       margin: 0;
@@ -35,1133 +16,198 @@
       width: 100%;
       height: 100%;
       background-color: #000;
-      color: var(--text-main);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: var(--font-size-base);
+      color: #fff;
+      font-family: sans-serif;
       overflow: hidden;
     }
 
-    /* Estilo do Foco D-Pad Universal / Cursor BrowseHere */
-    :focus {
-      outline: none;
-      border-color: var(--accent-color) !important;
-      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5);
-      transform: scale(1.02);
-      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-      z-index: 10;
-    }
-
-    .hidden { display: none !important; }
-
-    /* ==========================================================================
-       MODO PLAYER (Ecrã Principal & Fullscreen Video)
-       ========================================================================== */
-    #player-view {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-      background: #000;
-      overflow: hidden;
-    }
-
-    video {
+    /* Leitor de Vídeo em Ecrã Inteiro */
+    #video-player {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
       position: absolute;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      background: #000;
       z-index: 1;
     }
 
-    /* OSD - On Screen Display Overlay */
-    .osd-overlay {
+    /* OSD (On-Screen Display / Informação do Canal) */
+    #osd {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, rgba(15,15,18,0.95) 0%, rgba(15,15,18,0.85) 38%, rgba(0,0,0,0) 100%);
-      display: flex;
-      opacity: 1;
-      visibility: visible;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
-      z-index: 10;
-      pointer-events: auto;
-    }
-
-    .osd-overlay.fade-out {
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-    }
-
-    /* Sidebar de Canais no OSD com Scroll Suave Forçado */
-    .sidebar {
-      width: 380px;
-      height: 100%;
-      background: var(--bg-color);
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-      box-shadow: 5px 0 15px rgba(0,0,0,0.5);
-    }
-
-    .sidebar-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .sidebar-header h2 {
-      font-size: var(--font-size-title);
-      color: var(--accent-color);
-    }
-
-    .category-select, .btn-ui, .input-ui {
-      background: var(--card-bg);
-      color: var(--text-main);
-      border: 1px solid #2d2d3d;
-      padding: 12px 16px;
+      top: 40px;
+      right: 40px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 2px solid #e20074; /* Cor de destaque */
       border-radius: 8px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    /* Scrollbar otimizada para Browsers de TV */
-    .channel-list {
-      flex: 1;
-      overflow-y: auto;
-      scroll-behavior: smooth;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding-right: 5px;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    .channel-list::-webkit-scrollbar, .manager-table-container::-webkit-scrollbar {
-      width: 8px;
-    }
-    .channel-list::-webkit-scrollbar-thumb, .manager-table-container::-webkit-scrollbar-thumb {
-      background: var(--accent-color);
-      border-radius: 4px;
-    }
-
-    .channel-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 12px;
-      background: var(--card-bg);
-      border-radius: 8px;
-      border: 2px solid transparent;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .channel-item.active {
-      border-color: var(--accent-color);
-      background: #222232;
-    }
-
-    .channel-logo {
-      width: 40px;
-      height: 40px;
-      border-radius: 4px;
-      object-fit: contain;
-      background: #000;
-    }
-
-    .channel-info {
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .channel-name {
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .channel-group {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
-    .btn-remove-osd {
-      background: transparent;
-      border: none;
-      color: var(--danger);
-      font-size: 16px;
-      padding: 6px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      opacity: 0.7;
-      transition: opacity 0.2s, background 0.2s;
-    }
-
-    .btn-remove-osd:hover, .btn-remove-osd:focus {
-      opacity: 1;
-      background: rgba(239, 68, 68, 0.2);
-    }
-
-    /* Info Bar Inferior no Player */
-    .player-info-bar {
-      position: absolute;
-      bottom: 20px;
-      left: 400px;
-      right: 20px;
-      background: rgba(26, 26, 36, 0.95);
       padding: 15px 25px;
-      border-radius: 12px;
-      backdrop-filter: blur(8px);
+      z-index: 10;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      border: 1px solid rgba(255,255,255,0.1);
+      gap: 15px;
+      box-shadow: 0px 4px 15px rgba(0,0,0,0.5);
+      transition: opacity 0.3s ease;
+      opacity: 0;
     }
 
-    .stream-status {
-      display: inline-block;
-      width: 100px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--warning);
-      margin-right: 8px;
+    #osd.active {
+      opacity: 1;
     }
-    .stream-status.online { background: var(--success); }
-    .stream-status.offline { background: var(--danger); }
 
-    .loader {
+    #osd-number {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: #e20074;
+    }
+
+    #osd-name {
+      font-size: 1.5rem;
+    }
+
+    /* Indicador do buffer do número introduzido */
+    #num-input-display {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      border: 5px solid #2d2d3d;
-      border-top: 5px solid var(--accent-color);
-      border-radius: 50%;
-      width: 50px;
-      height: 50px;
-      animation: spin 1s linear infinite;
-      z-index: 20;
-    }
-    @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
-
-    .error-banner {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: var(--danger);
+      top: 40px;
+      left: 40px;
+      background: rgba(226, 0, 116, 0.9);
       color: #fff;
-      padding: 12px 20px;
+      font-size: 3rem;
+      font-weight: bold;
+      padding: 10px 25px;
       border-radius: 8px;
-      font-weight: bold;
-      z-index: 100;
-    }
-
-    /* ==========================================================================
-       MODO BACK OFFICE / GESTOR DE LISTAS
-       ========================================================================== */
-    #manager-view {
-      position: relative;
-      z-index: 50;
-      width: 100vw;
-      height: 100vh;
-      background: var(--bg-color);
-      padding: 30px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      box-sizing: border-box;
-    }
-
-    .manager-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 2px solid #2d2d3d;
-      padding-bottom: 15px;
-    }
-
-    .manager-actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .manager-controls {
-      display: flex;
-      gap: 15px;
-      align-items: center;
-      background: var(--card-bg);
-      padding: 15px;
-      border-radius: 10px;
-    }
-
-    .manager-table-container {
-      flex: 1;
-      overflow-y: auto;
-      background: var(--card-bg);
-      border-radius: 10px;
-      border: 1px solid #2d2d3d;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-    }
-
-    th, td {
-      padding: 14px 18px;
-      border-bottom: 1px solid #2d2d3d;
-    }
-
-    th {
-      background: #12121a;
-      color: var(--text-muted);
-      position: sticky;
-      top: 0;
-      z-index: 5;
-    }
-
-    tr:hover, tr:focus-within {
-      background: #222232;
-    }
-
-    .badge {
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: bold;
-      text-transform: uppercase;
-    }
-    .badge.online { background: rgba(16, 185, 129, 0.2); color: var(--success); }
-    .badge.offline { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
-    .badge.pending { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
-
-    .modal-overlay {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.8);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-    }
-    .modal {
-      background: var(--card-bg);
-      padding: 30px;
-      border-radius: 12px;
-      width: 500px;
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-      border: 1px solid #3b82f6;
+      z-index: 10;
+      display: none;
     }
   </style>
 </head>
-<body>
+<body tabindex="0">
 
-  <main id="player-view">
-    <div id="loader" class="loader hidden"></div>
-    <div id="error-banner" class="error-banner hidden">Erro na Reprodução do Stream</div>
+  <video id="video-player" autoplay playsinline muted></video>
 
-    <video id="video-player" autoplay playsinline muted crossorigin="anonymous"></video>
-
-    <!-- OSD Overlay -->
-    <div id="osd-overlay" class="osd-overlay">
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <h2>Web IPTV</h2>
-          <button id="btn-open-manager" class="btn-ui" tabindex="0">⚙️ Gestor</button>
-        </div>
-        
-        <select id="osd-category-filter" class="category-select" tabindex="0">
-          <option value="ALL">Todas as Categorias</option>
-        </select>
-
-        <div id="osd-channel-list" class="channel-list">
-          <!-- Injetado via JS -->
-        </div>
-      </aside>
-
-      <div class="player-info-bar">
-        <div>
-          <h3 id="current-channel-name">Nenhum canal selecionado</h3>
-          <p id="current-channel-group" style="color: var(--text-muted); font-size: 14px;">Carregue uma lista no Gestor</p>
-        </div>
-        <div style="text-align: right;">
-          <div><span id="status-indicator" class="stream-status"></span><span id="current-resolution">--x--</span></div>
-          <span id="current-tech" style="font-size: 12px; color: var(--text-muted);">Nativo</span>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <section id="manager-view" class="hidden">
-    <header class="manager-header">
-      <h1>Gestor de Listas IPTV</h1>
-      <div class="manager-actions">
-        <button id="btn-activate-selected" class="btn-ui" style="background: var(--accent-color);" tabindex="0">▶ Ativar Selecionados no Player</button>
-        <button id="btn-close-manager" class="btn-ui" tabindex="0">❌ Voltar ao Player</button>
-      </div>
-    </header>
-
-    <div class="manager-controls">
-      <button id="btn-trigger-file" class="btn-ui" tabindex="0">📁 Abrir Ficheiro M3U/JSON</button>
-      <input type="file" id="file-input" accept=".m3u,.m3u8,.json" class="hidden">
-
-      <input type="text" id="url-m3u-input" class="input-ui" placeholder="URL da Lista M3U/M3U8..." style="flex:1;" tabindex="0">
-      <button id="btn-load-url" class="btn-ui" tabindex="0">📥 Baixar URL</button>
-
-      <button id="btn-run-healthcheck" class="btn-ui" tabindex="0">🩺 Testar Canais</button>
-      <button id="btn-export-m3u" class="btn-ui" tabindex="0">💾 Exportar M3U</button>
-      <button id="btn-export-json" class="btn-ui" tabindex="0">💾 Exportar Backup JSON</button>
-      <button id="btn-add-channel" class="btn-ui" tabindex="0">➕ Novo Canal</button>
-    </div>
-
-    <div style="display: flex; gap: 15px;">
-      <input type="text" id="manager-search" class="input-ui" placeholder="🔍 Pesquisar canal por nome..." style="flex:2;" tabindex="0">
-      <select id="manager-category-filter" class="category-select" style="flex:1;" tabindex="0">
-        <option value="ALL">Todas as Categorias</option>
-      </select>
-    </div>
-
-    <div class="manager-table-container">
-      <table>
-        <thead>
-          <tr>
-            <th><input type="checkbox" id="select-all-channels" tabindex="0"></th>
-            <th>Logo</th>
-            <th>Nome do Canal</th>
-            <th>Categoria / Grupo</th>
-            <th>Estado</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
-        <tbody id="manager-table-body">
-          <!-- Injetado Dinamicamente -->
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- Modal para Adicionar / Editar Canal -->
-  <div id="channel-modal" class="modal-overlay hidden">
-    <div class="modal">
-      <h3 id="modal-title">Editar Canal</h3>
-      <input type="text" id="modal-channel-name" class="input-ui" placeholder="Nome do Canal" tabindex="0">
-      <input type="text" id="modal-channel-group" class="input-ui" placeholder="Categoria/Grupo" tabindex="0">
-      <input type="text" id="modal-channel-url" class="input-ui" placeholder="URL do Stream (HLS / MP4)" tabindex="0">
-      <input type="text" id="modal-channel-logo" class="input-ui" placeholder="URL do Logo (Opcional)" tabindex="0">
-      <div style="display: flex; gap: 10px; justify-content: flex-end;">
-        <button id="modal-btn-cancel" class="btn-ui" tabindex="0">Cancelar</button>
-        <button id="modal-btn-save" class="btn-ui" style="background: var(--accent-color);" tabindex="0">Guardar</button>
-      </div>
-    </div>
+  <div id="osd">
+    <div id="osd-number">1</div>
+    <div id="osd-name">Carregando...</div>
   </div>
 
+  <div id="num-input-display"></div>
+
   <script>
-    const STORAGE_KEY = 'web_iptv_channels_db';
-    const LAST_CHANNEL_KEY = 'web_iptv_last_channel';
-    let channels = [];
-    let activePlaylist = [];
-    let currentChannelIndex = -1;
-    let hlsPlayer = null;
+    // Lista de canais de exemplo (Substitua as URLs pelas suas streams)
+    const canais = [
+      { id: 1, name: "Canal 1 - Exemplo HD", url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" },
+      { id: 2, name: "Canal 2 - Exemplo Stream", url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" },
+      { id: 3, name: "Canal 3 - Exemplo Natureza", url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" }
+    ];
+
+    let canalAtualIndex = 0;
     let osdTimeout = null;
-    let editingChannelId = null;
+    let inputBuffer = "";
+    let inputBufferTimeout = null;
 
-    const video = document.getElementById('video-player');
-    const osdOverlay = document.getElementById('osd-overlay');
-    const playerView = document.getElementById('player-view');
-    const managerView = document.getElementById('manager-view');
-    const loader = document.getElementById('loader');
-    const errorBanner = document.getElementById('error-banner');
-    
-    const osdChannelList = document.getElementById('osd-channel-list');
-    const osdCategoryFilter = document.getElementById('osd-category-filter');
-    
-    const managerTableBody = document.getElementById('manager-table-body');
-    const managerCategoryFilter = document.getElementById('manager-category-filter');
-    const managerSearch = document.getElementById('manager-search');
+    const player = document.getElementById('video-player');
+    const osd = document.getElementById('osd');
+    const osdNumber = document.getElementById('osd-number');
+    const osdName = document.getElementById('osd-name');
+    const numDisplay = document.getElementById('num-input-display');
 
-    window.addEventListener('DOMContentLoaded', () => {
-      loadStorageData();
-      initPlayerEngine();
-      setupDPadNavigation();
-      renderManagerTable();
-      renderOSDChannelList();
-      populateCategoryDropdowns();
-      
-      // Auto-play no último canal guardado
-      autoPlayLastChannel();
-      resetOSDTimeout();
+    // Inicialização da App
+    window.addEventListener('load', () => {
+      document.body.focus();
+      carregarCanal(canalAtualIndex);
     });
 
-    function loadStorageData() {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          channels = JSON.parse(stored);
-          activePlaylist = channels.filter(c => c.selected !== false);
+    // Garante que o foco permanece na página se o utilizador clicar no ecrã
+    document.addEventListener('click', () => {
+      document.body.focus();
+    });
+
+    // Mapeamento Global de Teclas para o Comando SDMC-DV9161 (Android TV)
+    document.addEventListener('keydown', (event) => {
+      const code = event.keyCode || event.which;
+      const key = event.key;
+
+      // 1. Mudar para o Canal SEGUINTE (Seta Cima, CH+, PageUp)
+      if (key === 'ArrowUp' || code === 38 || code === 33 || code === 427) {
+        event.preventDefault();
+        proximoCanal();
+      }
+
+      // 2. Mudar para o Canal ANTERIOR (Seta Baixo, CH-, PageDown)
+      else if (key === 'ArrowDown' || code === 40 || code === 34 || code === 428) {
+        event.preventDefault();
+        canalAnterior();
+      }
+
+      // 3. Teclas Numéricas (0-9) - Teclado numérico físico ou do comando
+      else if ((code >= 48 && code <= 57) || (code >= 96 && code <= 105)) {
+        event.preventDefault();
+        const num = code >= 96 ? code - 96 : code - 48;
+        processarDigitoNumerico(num);
+      }
+
+      // 4. Tecla OK / Enter (Mostrar OSD)
+      else if (key === 'Enter' || code === 13) {
+        event.preventDefault();
+        mostrarOSD();
+      }
+    });
+
+    function carregarCanal(index) {
+      if (index < 0 || index >= canais.length) return;
+      
+      canalAtualIndex = index;
+      const canal = canais[canalAtualIndex];
+
+      player.src = canal.url;
+      player.play().catch(err => console.log("Erro de reprodução:", err));
+
+      osdNumber.innerText = canal.id;
+      osdName.innerText = canal.name;
+      mostrarOSD();
+    }
+
+    function proximoCanal() {
+      let novoIndex = canalAtualIndex + 1;
+      if (novoIndex >= canais.length) novoIndex = 0; // Volta ao primeiro
+      carregarCanal(novoIndex);
+    }
+
+    function canalAnterior() {
+      let novoIndex = canalAtualIndex - 1;
+      if (novoIndex < 0) novoIndex = canais.length - 1; // Vai para o último
+      carregarCanal(novoIndex);
+    }
+
+    function processarDigitoNumerico(digito) {
+      inputBuffer += digito;
+      numDisplay.innerText = inputBuffer;
+      numDisplay.style.display = 'block';
+
+      clearTimeout(inputBufferTimeout);
+
+      // Espera 1.5s após o último dígito premido para mudar para o canal pretendido
+      inputBufferTimeout = setTimeout(() => {
+        const numeroProcurado = parseInt(inputBuffer, 10);
+        const indexEncontrado = canais.findIndex(c => c.id === numeroProcurado);
+
+        if (indexEncontrado !== -1) {
+          carregarCanal(indexEncontrado);
         } else {
-          channels = [];
-          activePlaylist = [];
-        }
-      } catch (e) {
-        console.error("Erro ao ler localStorage:", e);
-        channels = [];
-      }
-    }
-
-    function saveStorageData() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
-      } catch (e) {
-        console.error("Erro ao guardar no localStorage:", e);
-      }
-    }
-
-    function autoPlayLastChannel() {
-      if (activePlaylist.length === 0) return;
-      const lastChannelId = localStorage.getItem(LAST_CHANNEL_KEY);
-      let targetIndex = 0;
-
-      if (lastChannelId) {
-        const foundIndex = activePlaylist.findIndex(c => c.id === lastChannelId);
-        if (foundIndex !== -1) targetIndex = foundIndex;
-      }
-      
-      playChannelByIndex(targetIndex);
-    }
-
-    /* --------------------------------------------------------------------------
-       MOTOR DE REPRODUÇÃO - OTIMIZADO PARA RTP2 E CANAIS COM STALLING
-       -------------------------------------------------------------------------- */
-    function initPlayerEngine() {
-      if (Hls.isSupported()) {
-        hlsPlayer = new Hls({
-          enableWorker: false, // BrowseHere falha com WebWorkers
-          lowLatencyMode: false,
-          manifestLoadingTimeOut: 15000,
-          maxBufferLength: 60,
-          maxMaxBufferLength: 120,
-          liveSyncDurationCount: 3,
-          startLevel: -1
-        });
-
-        hlsPlayer.on(Hls.Events.ERROR, function (event, data) {
-          if (data.fatal) {
-            switch (data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                console.warn("Erro de rede HLS, tentando reconectar...");
-                hlsPlayer.startLoad();
-                break;
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                console.warn("Erro de media HLS, tentando recuperar...");
-                hlsPlayer.recoverMediaError();
-                break;
-              default:
-                destroyHlsAndFallback();
-                break;
-            }
-          }
-        });
-      }
-
-      video.addEventListener('waiting', () => loader.classList.remove('hidden'));
-      video.addEventListener('playing', () => {
-        loader.classList.add('hidden');
-        errorBanner.classList.add('hidden');
-        updateResolutionInfo();
-      });
-      video.addEventListener('error', () => {
-        loader.classList.add('hidden');
-        showError("Falha na reprodução do stream.");
-      });
-    }
-
-    function playChannelByIndex(index) {
-      if (index < 0 || index >= activePlaylist.length) return;
-      currentChannelIndex = index;
-      const channel = activePlaylist[index];
-      
-      // Guardar como último canal reproduzido
-      localStorage.setItem(LAST_CHANNEL_KEY, channel.id);
-      playChannel(channel);
-    }
-
-    function playChannel(channel) {
-      if (!channel || !channel.url) return;
-
-      loader.classList.remove('hidden');
-      errorBanner.classList.add('hidden');
-
-      document.getElementById('current-channel-name').textContent = channel.name;
-      document.getElementById('current-channel-group').textContent = channel.group || 'Geral';
-      document.getElementById('status-indicator').className = `stream-status ${channel.status || ''}`;
-
-      if (hlsPlayer) {
-        hlsPlayer.detachMedia();
-      }
-
-      const startPlayback = () => {
-        const playPromise = video.play();
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            video.muted = false;
-          }).catch(err => {
-            console.warn("Autoplay bloqueado pelo BrowseHere, tentando em Muted:", err);
-            video.muted = true;
-            video.play();
-          });
-        }
-      };
-
-      if ((channel.url.includes('.m3u8') || channel.url.includes('/hls/')) && Hls.isSupported()) {
-        document.getElementById('current-tech').textContent = 'HLS.js Engine';
-        hlsPlayer.loadSource(channel.url);
-        hlsPlayer.attachMedia(video);
-        hlsPlayer.once(Hls.Events.MANIFEST_PARSED, () => {
-          startPlayback();
-        });
-      } else {
-        document.getElementById('current-tech').textContent = 'HTML5 Native';
-        video.src = channel.url;
-        startPlayback();
-      }
-
-      document.querySelectorAll('.channel-item').forEach(el => {
-        el.classList.toggle('active', el.dataset.id === channel.id);
-      });
-
-      resetOSDTimeout();
-    }
-
-    function destroyHlsAndFallback() {
-      if (hlsPlayer) {
-        hlsPlayer.destroy();
-      }
-      showError("Erro crítico no fluxo HLS. Tentando fallback nativo...");
-      if (activePlaylist[currentChannelIndex]) {
-        video.src = activePlaylist[currentChannelIndex].url;
-        video.play();
-      }
-    }
-
-    function updateResolutionInfo() {
-      if (video.videoWidth) {
-        document.getElementById('current-resolution').textContent = `${video.videoWidth}x${video.videoHeight}`;
-      }
-    }
-
-    function showError(msg) {
-      errorBanner.textContent = msg;
-      errorBanner.classList.remove('hidden');
-      setTimeout(() => errorBanner.classList.add('hidden'), 5000);
-    }
-
-    /* --------------------------------------------------------------------------
-       CONTROLO D-PAD E BOTÕES DE MUDAR DE CANAL DO COMANDO (CH+ / CH-)
-       -------------------------------------------------------------------------- */
-    function setupDPadNavigation() {
-      document.addEventListener('keydown', (e) => {
-        const key = e.key;
-        const keyCode = e.keyCode;
-
-        // Suporte para Botões Channel UP / Down do Comando da TV
-        const isChannelUp = key === 'ChannelUp' || key === 'MediaTrackNext' || key === 'PageUp' || keyCode === 33 || keyCode === 427;
-        const isChannelDown = key === 'ChannelDown' || key === 'MediaTrackPrevious' || key === 'PageDown' || keyCode === 34 || keyCode === 428;
-
-        if (isChannelUp) {
-          e.preventDefault();
-          changeChannelStep(1);
-          return;
+          mostrarOSD();
+          osdName.innerText = "Canal não encontrado";
         }
 
-        if (isChannelDown) {
-          e.preventDefault();
-          changeChannelStep(-1);
-          return;
-        }
-
-        if (managerView.classList.contains('hidden') && osdOverlay.classList.contains('fade-out')) {
-          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(key)) {
-            showOSD();
-            e.preventDefault();
-            return;
-          }
-        }
-
-        resetOSDTimeout();
-
-        if (!osdOverlay.classList.contains('fade-out') && managerView.classList.contains('hidden')) {
-          if (key === 'ArrowDown' || key === 'ArrowUp') {
-            const focusEl = document.activeElement;
-            if (focusEl && focusEl.classList.contains('channel-item')) {
-              e.preventDefault();
-              const nextEl = key === 'ArrowDown' ? focusEl.nextElementSibling : focusEl.previousElementSibling;
-              if (nextEl && nextEl.classList.contains('channel-item')) {
-                nextEl.focus();
-                nextEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-              }
-            }
-          }
-        }
-
-        switch (key) {
-          case 'Escape':
-          case 'BackSpace':
-          case 'GoBack':
-            if (!managerView.classList.contains('hidden')) {
-              e.preventDefault();
-              closeManager();
-            } else if (!osdOverlay.classList.contains('fade-out')) {
-              e.preventDefault();
-              hideOSD();
-            }
-            break;
-        }
-      });
-
-      playerView.addEventListener('mousemove', showOSD);
-      playerView.addEventListener('click', showOSD);
+        inputBuffer = "";
+        numDisplay.style.display = 'none';
+      }, 1500);
     }
 
-    function changeChannelStep(direction) {
-      if (activePlaylist.length === 0) return;
-      let newIndex = currentChannelIndex + direction;
-      
-      if (newIndex >= activePlaylist.length) newIndex = 0;
-      if (newIndex < 0) newIndex = activePlaylist.length - 1;
-      
-      playChannelByIndex(newIndex);
-      showOSD();
-    }
-
-    function resetOSDTimeout() {
-      if (osdTimeout) clearTimeout(osdTimeout);
+    function mostrarOSD() {
+      osd.classList.add('active');
+      clearTimeout(osdTimeout);
       osdTimeout = setTimeout(() => {
-        if (managerView.classList.contains('hidden') && document.activeElement.tagName !== 'SELECT') {
-          hideOSD();
-        }
-      }, 5000);
-    }
-
-    function showOSD() {
-      osdOverlay.classList.remove('fade-out');
-      resetOSDTimeout();
-    }
-
-    function hideOSD() {
-      osdOverlay.classList.add('fade-out');
-    }
-
-    /* --------------------------------------------------------------------------
-       PARSER M3U & IMPORTAÇÃO
-       -------------------------------------------------------------------------- */
-    function parseM3U(content) {
-      const lines = content.split('\n');
-      const parsedChannels = [];
-      let currentChannel = null;
-
-      for (let i = 0; i < lines.length; i++) {
-        let line = lines[i].trim();
-
-        if (line.startsWith('#EXTINF:')) {
-          currentChannel = {
-            id: 'ch_' + Math.random().toString(36).substr(2, 9),
-            name: 'Canal sem Nome',
-            url: '',
-            group: 'Geral',
-            logo: '',
-            status: 'pending',
-            selected: true
-          };
-
-          const nameMatch = line.match(/,(.+)$/);
-          if (nameMatch) currentChannel.name = nameMatch[1].trim();
-
-          const groupMatch = line.match(/group-title="([^"]+)"/i);
-          if (groupMatch) currentChannel.group = groupMatch[1].trim();
-
-          const logoMatch = line.match(/tvg-logo="([^"]+)"/i);
-          if (logoMatch) currentChannel.logo = logoMatch[1].trim();
-
-        } else if (line.length > 0 && !line.startsWith('#') && currentChannel) {
-          currentChannel.url = line;
-          parsedChannels.push(currentChannel);
-          currentChannel = null;
-        }
-      }
-      return parsedChannels;
-    }
-
-    document.getElementById('btn-trigger-file').addEventListener('click', () => {
-      document.getElementById('file-input').click();
-    });
-
-    document.getElementById('file-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const content = event.target.result;
-        if (file.name.endsWith('.json')) {
-          try {
-            channels = JSON.parse(content);
-          } catch (err) {
-            alert('Ficheiro JSON inválido.');
-            return;
-          }
-        } else {
-          channels = parseM3U(content);
-        }
-        activePlaylist = channels.filter(c => c.selected !== false);
-        saveStorageData();
-        refreshAllViews();
-        if (activePlaylist.length > 0) playChannelByIndex(0);
-        alert(`${channels.length} canais carregados com sucesso!`);
-      };
-      reader.readAsText(file);
-    });
-
-    document.getElementById('btn-load-url').addEventListener('click', async () => {
-      const url = document.getElementById('url-m3u-input').value.trim();
-      if (!url) return alert('Insira uma URL válida.');
-
-      loader.classList.remove('hidden');
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const content = await res.text();
-        channels = parseM3U(content);
-        activePlaylist = channels.filter(c => c.selected !== false);
-        saveStorageData();
-        refreshAllViews();
-        if (activePlaylist.length > 0) playChannelByIndex(0);
-        alert(`Sucesso: ${channels.length} canais importados!`);
-      } catch (err) {
-        alert(`Erro ao descarregar a lista: ${err.message}`);
-      } finally {
-        loader.classList.add('hidden');
-      }
-    });
-
-    /* --------------------------------------------------------------------------
-       RENDERIZAÇÃO DE CANAIS
-       -------------------------------------------------------------------------- */
-    function renderOSDChannelList() {
-      const selectedGroup = osdCategoryFilter.value;
-      osdChannelList.innerHTML = '';
-
-      const listToRender = activePlaylist.filter(c => {
-        return selectedGroup === 'ALL' || c.group === selectedGroup;
-      });
-
-      if (listToRender.length === 0) {
-        osdChannelList.innerHTML = `<p style="padding:10px; color:var(--text-muted);">Nenhum canal ativo encontrado.</p>`;
-        return;
-      }
-
-      listToRender.forEach(c => {
-        const item = document.createElement('div');
-        item.className = 'channel-item';
-        item.dataset.id = c.id;
-        item.tabIndex = 0;
-        item.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 12px; overflow: hidden; flex: 1;">
-            <img src="${c.logo || ''}" class="channel-logo" onerror="this.style.display='none'">
-            <div class="channel-info">
-              <span class="channel-name">${escapeHtml(c.name)}</span>
-              <span class="channel-group">${escapeHtml(c.group || 'Geral')}</span>
-            </div>
-          </div>
-          <button class="btn-remove-osd" title="Remover Canal" tabindex="0">🗑️</button>
-        `;
-
-        item.addEventListener('focus', () => {
-          item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        });
-
-        item.addEventListener('click', (e) => {
-          if (!e.target.classList.contains('btn-remove-osd')) {
-            const idx = activePlaylist.findIndex(p => p.id === c.id);
-            if (idx !== -1) playChannelByIndex(idx);
-          }
-        });
-
-        item.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' && !e.target.classList.contains('btn-remove-osd')) {
-            const idx = activePlaylist.findIndex(p => p.id === c.id);
-            if (idx !== -1) playChannelByIndex(idx);
-          }
-        });
-
-        const btnRemove = item.querySelector('.btn-remove-osd');
-        btnRemove.addEventListener('click', (e) => {
-          e.stopPropagation();
-          removeChannelFromOSD(c.id);
-        });
-
-        osdChannelList.appendChild(item);
-      });
-    }
-
-    function removeChannelFromOSD(id) {
-      const activeEl = document.querySelector('.channel-item.active');
-      const isCurrentActive = activeEl && activeEl.dataset.id === id;
-
-      channels = channels.filter(c => c.id !== id);
-      activePlaylist = activePlaylist.filter(c => c.id !== id);
-      saveStorageData();
-      refreshAllViews();
-
-      if (isCurrentActive && activePlaylist.length > 0) {
-        playChannelByIndex(0);
-      } else if (activePlaylist.length === 0) {
-        if (hlsPlayer) hlsPlayer.detachMedia();
-        video.src = '';
-        document.getElementById('current-channel-name').textContent = 'Nenhum canal selecionado';
-      }
-    }
-
-    function renderManagerTable() {
-      const filterGroup = managerCategoryFilter.value;
-      const searchTxt = managerSearch.value.toLowerCase();
-
-      managerTableBody.innerHTML = '';
-
-      const filtered = channels.filter(c => {
-        const matchesGroup = filterGroup === 'ALL' || c.group === filterGroup;
-        const matchesSearch = c.name.toLowerCase().includes(searchTxt);
-        return matchesGroup && matchesSearch;
-      });
-
-      filtered.forEach(c => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><input type="checkbox" class="chk-select" data-id="${c.id}" ${c.selected !== false ? 'checked' : ''} tabindex="0"></td>
-          <td><img src="${c.logo || ''}" class="channel-logo" onerror="this.style.display='none'"></td>
-          <td><strong>${escapeHtml(c.name)}</strong></td>
-          <td>${escapeHtml(c.group || 'Geral')}</td>
-          <td><span class="badge ${c.status || 'pending'}">${c.status || 'Pendente'}</span></td>
-          <td>
-            <button class="btn-ui" onclick="editChannel('${c.id}')" tabindex="0">✏️</button>
-            <button class="btn-ui" onclick="deleteChannel('${c.id}')" style="background: var(--danger);" tabindex="0">🗑️</button>
-          </td>
-        `;
-        managerTableBody.appendChild(tr);
-      });
-
-      document.querySelectorAll('.chk-select').forEach(chk => {
-        chk.addEventListener('change', (e) => {
-          const id = e.target.dataset.id;
-          const ch = channels.find(item => item.id === id);
-          if (ch) ch.selected = e.target.checked;
-          saveStorageData();
-        });
-      });
-    }
-
-    function populateCategoryDropdowns() {
-      const groups = [...new Set(channels.map(c => c.group || 'Geral'))].sort();
-
-      [osdCategoryFilter, managerCategoryFilter].forEach(select => {
-        const currentVal = select.value;
-        select.innerHTML = '<option value="ALL">Todas as Categorias</option>';
-        groups.forEach(g => {
-          const opt = document.createElement('option');
-          opt.value = g;
-          opt.textContent = g;
-          select.appendChild(opt);
-        });
-        select.value = currentVal;
-      });
-    }
-
-    function refreshAllViews() {
-      populateCategoryDropdowns();
-      renderManagerTable();
-      renderOSDChannelList();
-    }
-
-    /* --------------------------------------------------------------------------
-       HEALTH CHECKER
-       -------------------------------------------------------------------------- */
-    document.getElementById('btn-run-healthcheck').addEventListener('click', async () => {
-      const selectedChannels = channels.filter(c => c.selected !== false);
-      if (selectedChannels.length === 0) return alert('Nenhum canal selecionado para testar.');
-
-      alert(`A iniciar teste em ${selectedChannels.length} canais...`);
-
-      for (let ch of selectedChannels) {
-        ch.status = 'pending';
-        renderManagerTable();
-
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-          await fetch(ch.url, {
-            method: 'HEAD',
-            signal: controller.signal,
-            mode: 'no-cors'
-          });
-
-          clearTimeout(timeoutId);
-          ch.status = 'online';
-        } catch (err) {
-          ch.status = 'offline';
-        }
-        renderManagerTable();
-      }
-      saveStorageData();
-      alert('Teste concluído!');
-    });
-
-    /* --------------------------------------------------------------------------
-       MODAL & CONTROLOS DO GESTOR
-       -------------------------------------------------------------------------- */
-    document.getElementById('btn-open-manager').addEventListener('click', () => {
-      playerView.classList.add('hidden');
-      managerView.classList.remove('hidden');
-      renderManagerTable();
-    });
-
-    function closeManager() {
-      managerView.classList.add('hidden');
-      playerView.classList.remove('hidden');
-      showOSD();
-    }
-
-    document.getElementById('btn-close-manager').addEventListener('click', closeManager);
-
-    document.getElementById('btn-activate-selected').addEventListener('click', () => {
-      activePlaylist = channels.filter(c => c.selected !== false);
-      saveStorageData();
-      renderOSDChannelList();
-      alert(`Ativados ${activePlaylist.length} canais.`);
-      closeManager();
-    });
-
-    document.getElementById('select-all-channels').addEventListener('change', (e) => {
-      const isChecked = e.target.checked;
-      channels.forEach(c => c.selected = isChecked);
-      renderManagerTable();
-      saveStorageData();
-    });
-
-    document.getElementById('btn-add-channel').addEventListener('click', () => {
-      editingChannelId = null;
-      document.getElementById('modal-title').textContent = 'Novo Canal';
-      document.getElementById('modal-channel-name').value = '';
-      document.getElementById('modal-channel-group').value = 'Geral';
-      document.getElementById('modal-channel-url').value = '';
-      document.getElementById('modal-channel-logo').value = '';
-      document.getElementById('channel-modal').classList.remove('hidden');
-    });
-
-    window.editChannel = function(id) {
-      const ch = channels.find(item => item.id === id);
-      if (!ch) return;
-      editingChannelId = id;
-      document.getElementById('modal-title').textContent = 'Editar Canal';
-      document.getElementById('modal-channel-name').value = ch.name;
-      document.getElementById('modal-channel-group').value = ch.group || 'Geral';
-      document.getElementById('modal-channel-url').value = ch.url;
-      document.getElementById('modal-channel-logo').value = ch.logo || '';
-      document.getElementById('channel-modal').classList.remove('hidden');
-    };
-
-    window.deleteChannel = function(id) {
-      if (confirm('Eliminar este canal?')) {
-        channels = channels.filter(c => c.id !== id);
-        activePlaylist = activePlaylist.filter(c => c.id !== id);
-        saveStorageData();
-        refreshAllViews();
-      }
-    };
-
-    document.getElementById('modal-btn-cancel').addEventListener('click', () => {
-      document.getElementById('channel-modal').classList.add('hidden');
-    });
-
-    document.getElementById('modal-btn-save').addEventListener('click', () => {
-      const name = document.getElementById('modal-channel-name').value.trim();
-      const group = document.getElementById('modal-channel-group').value.trim() || 'Geral';
-      const url = document.getElementById('modal-channel-url').value.trim();
-      const logo = document.getElementById('modal-channel-logo').value.trim();
-
-      if (!name || !url) return alert('Nome e URL são obrigatórios!');
-
-      if (editingChannelId) {
-        const ch = channels.find(item => item.id === editingChannelId);
-        if (ch) {
-          ch.name = name;
-          ch.group = group;
-          ch.url = url;
-          ch.logo = logo;
-        }
-      } else {
-        channels.push({
-          id: 'ch_' + Math.random().toString(36).substr(2, 9),
-          name, group, url, logo,
-          status: 'pending',
-          selected: true
-        });
-      }
-
-      activePlaylist = channels.filter(c => c.selected !== false);
-      saveStorageData();
-      refreshAllViews();
-      document.getElementById('channel-modal').classList.add('hidden');
-    });
-
-    /* --------------------------------------------------------------------------
-       EXPORTAÇÃO
-       -------------------------------------------------------------------------- */
-    document.getElementById('btn-export-m3u').addEventListener('click', () => {
-      let m3uContent = '#EXTM3U\n';
-      const targets = channels.filter(c => c.selected !== false);
-
-      targets.forEach(c => {
-        m3uContent += `#EXTINF:-1 tvg-logo="${c.logo || ''}" group-title="${c.group || 'Geral'}",${c.name}\n${c.url}\n`;
-      });
-
-      downloadFile(m3uContent, 'playlist_export.m3u', 'text/plain');
-    });
-
-    document.getElementById('btn-export-json').addEventListener('click', () => {
-      const jsonContent = JSON.stringify(channels, null, 2);
-      downloadFile(jsonContent, 'iptv_backup.json', 'application/json');
-    });
-
-    function downloadFile(content, fileName, contentType) {
-      const a = document.createElement('a');
-      const file = new Blob([content], { type: contentType });
-      a.href = URL.createObjectURL(file);
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }
-
-    osdCategoryFilter.addEventListener('change', renderOSDChannelList);
-    managerCategoryFilter.addEventListener('change', renderManagerTable);
-    managerSearch.addEventListener('input', renderManagerTable);
-
-    function escapeHtml(str) {
-      return str.replace(/[&<>"']/g, function(m) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
-      });
+        osd.classList.remove('active');
+      }, 4000); // Esconde o OSD após 4 segundos
     }
   </script>
 </body>
